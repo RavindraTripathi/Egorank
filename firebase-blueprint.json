@@ -1,0 +1,200 @@
+{
+  "entities": {
+    "Profile": {
+      "title": "Profile",
+      "description": "Public competitor profile on EgoRank",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "username": { "type": "string", "minLength": 3, "maxLength": 32, "pattern": "^[a-zA-Z0-9_]+$" },
+        "usernameLower": { "type": "string", "minLength": 3, "maxLength": 32, "pattern": "^[a-z0-9_]+$" },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "avatarUrl": { "type": "string", "maxLength": 500 },
+        "bio": { "type": "string", "maxLength": 400 },
+        "websiteUrl": { "type": "string", "maxLength": 300 },
+        "achievement": { "type": "string", "maxLength": 160 },
+        "featuredTier": { "type": "string", "enum": ["none", "featured_7d", "premium_30d", "sponsored"] },
+        "referralCode": { "type": "string", "minLength": 4, "maxLength": 32 },
+        "referredBy": { "type": "string", "maxLength": 32 },
+        "isSuspended": { "type": "boolean" },
+        "isDemo": { "type": "boolean" },
+        "rankScore": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "username", "usernameLower", "displayName", "featuredTier", "referralCode", "isSuspended", "createdAt"]
+    },
+    "UsernameLock": {
+      "title": "UsernameLock",
+      "description": "Enforces unique lowercase usernames across EgoRank",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "createdAt"]
+    },
+    "LeaderboardState": {
+      "title": "LeaderboardState",
+      "description": "Global throne and sandbox escalation state",
+      "type": "object",
+      "properties": {
+        "currentChampionUid": { "type": "string", "maxLength": 128 },
+        "currentChampionUsername": { "type": "string", "maxLength": 32 },
+        "currentChampionDisplayName": { "type": "string", "maxLength": 80 },
+        "currentChampionAvatar": { "type": "string", "maxLength": 500 },
+        "currentChampionAchievement": { "type": "string", "maxLength": 160 },
+        "currentPriceCents": { "type": "number" },
+        "nextPriceCents": { "type": "number" },
+        "version": { "type": "number" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["currentChampionUid", "currentChampionUsername", "currentPriceCents", "nextPriceCents", "version", "updatedAt"]
+    },
+    "Challenge": {
+      "title": "Challenge",
+      "description": "Competitive challenge record (sandbox simulation)",
+      "type": "object",
+      "properties": {
+        "challengerUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "challengerUsername": { "type": "string", "minLength": 3, "maxLength": 32 },
+        "previousChampionUid": { "type": "string", "maxLength": 128 },
+        "offeredPriceCents": { "type": "number" },
+        "status": { "type": "string", "enum": ["pending", "succeeded", "failed", "expired", "sandbox_completed"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["challengerUid", "offeredPriceCents", "status", "createdAt"]
+    },
+    "Payment": {
+      "title": "Payment",
+      "description": "Unified server-managed multi-provider payment record (Cashfree, PayPal, Stripe)",
+      "type": "object",
+      "properties": {
+        "user_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "provider": { "type": "string", "enum": ["cashfree", "paypal", "stripe"] },
+        "provider_order_id": { "type": "string", "maxLength": 200 },
+        "provider_transaction_id": { "type": "string", "maxLength": 200 },
+        "package_type": { "type": "string", "enum": ["featured_7d", "premium_30d", "sponsored"] },
+        "country_code": { "type": "string", "minLength": 2, "maxLength": 2 },
+        "amount": { "type": "number" },
+        "currency": { "type": "string", "enum": ["INR", "USD"] },
+        "payment_status": { "type": "string", "enum": ["pending", "paid", "failed", "refunded", "cancelled", "disputed"] },
+        "created_at": { "type": "string", "format": "date-time" },
+        "completed_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["user_id", "provider", "provider_order_id", "package_type", "country_code", "amount", "currency", "payment_status", "created_at"]
+    },
+    "WebhookEvent": {
+      "title": "WebhookEvent",
+      "description": "Idempotent webhook event deduplication record",
+      "type": "object",
+      "properties": {
+        "provider": { "type": "string", "enum": ["cashfree", "paypal", "stripe"] },
+        "provider_event_id": { "type": "string", "maxLength": 200 },
+        "event_type": { "type": "string", "maxLength": 120 },
+        "processed_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["provider", "provider_event_id", "event_type", "processed_at"]
+    },
+    "ChampionHistory": {
+      "title": "ChampionHistory",
+      "description": "Immutable historical Hall of Fame reign record",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "username": { "type": "string", "minLength": 3, "maxLength": 32 },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "avatarUrl": { "type": "string", "maxLength": 500 },
+        "achievement": { "type": "string", "maxLength": 160 },
+        "winningPriceCents": { "type": "number" },
+        "startedAt": { "type": "string", "format": "date-time" },
+        "endedAt": { "type": "string", "format": "date-time" },
+        "isDemo": { "type": "boolean" }
+      },
+      "required": ["uid", "username", "displayName", "winningPriceCents", "startedAt"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "User notification record",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "type": { "type": "string", "enum": ["package_activated", "package_expired", "featured", "achievement", "system"] },
+        "title": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "message": { "type": "string", "minLength": 1, "maxLength": 400 },
+        "read": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "type", "title", "message", "read", "createdAt"]
+    },
+    "Report": {
+      "title": "Report",
+      "description": "Moderation report filed against a profile",
+      "type": "object",
+      "properties": {
+        "reporterUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "targetUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "targetUsername": { "type": "string", "maxLength": 32 },
+        "reason": { "type": "string", "minLength": 5, "maxLength": 500 },
+        "status": { "type": "string", "enum": ["open", "reviewed", "dismissed"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["reporterUid", "targetUid", "reason", "status", "createdAt"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Admin and security audit log",
+      "type": "object",
+      "properties": {
+        "actorUid": { "type": "string", "maxLength": 128 },
+        "action": { "type": "string", "maxLength": 100 },
+        "target": { "type": "string", "maxLength": 128 },
+        "details": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["actorUid", "action", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/profiles/{uid}": {
+      "schema": { "$ref": "#/entities/Profile" },
+      "description": "Public competitor profiles"
+    },
+    "/usernames/{usernameLower}": {
+      "schema": { "$ref": "#/entities/UsernameLock" },
+      "description": "Unique username registry"
+    },
+    "/leaderboard_state/{stateId}": {
+      "schema": { "$ref": "#/entities/LeaderboardState" },
+      "description": "Global throne state"
+    },
+    "/challenges/{challengeId}": {
+      "schema": { "$ref": "#/entities/Challenge" },
+      "description": "Sandbox challenge log"
+    },
+    "/payments/{paymentId}": {
+      "schema": { "$ref": "#/entities/Payment" },
+      "description": "Unified multi-provider payment records"
+    },
+    "/webhook_events/{eventId}": {
+      "schema": { "$ref": "#/entities/WebhookEvent" },
+      "description": "Idempotent webhook deduplication log"
+    },
+    "/champion_history/{historyId}": {
+      "schema": { "$ref": "#/entities/ChampionHistory" },
+      "description": "Immutable Hall of Fame records"
+    },
+    "/notifications/{notificationId}": {
+      "schema": { "$ref": "#/entities/Notification" },
+      "description": "User alerts"
+    },
+    "/reports/{reportId}": {
+      "schema": { "$ref": "#/entities/Report" },
+      "description": "Moderation reports"
+    },
+    "/audit_logs/{logId}": {
+      "schema": { "$ref": "#/entities/AuditLog" },
+      "description": "Admin audit trail"
+    }
+  }
+}

@@ -1,0 +1,280 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 1. Global Default-Deny Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 2. Hardened Global Helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(uid) {
+      return isVerified() && request.auth.uid == uid;
+    }
+
+    function isAdmin() {
+      return isVerified() && (
+        request.auth.token.email == 'tripathiravindra212@gmail.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidUsername(u) {
+      return u is string && u.size() >= 3 && u.size() <= 32 && u.matches('^[a-zA-Z0-9_]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidProfile(data) {
+      return data.keys().hasAll([
+          'uid', 'username', 'usernameLower', 'displayName',
+          'featuredTier', 'referralCode', 'isSuspended', 'isDemo', 'badges', 'rankScore', 'createdAt'
+        ]) &&
+        data.keys().hasOnly([
+          'uid', 'username', 'usernameLower', 'displayName', 'avatarUrl', 'bio',
+          'websiteUrl', 'socialLinks', 'achievement', 'badges', 'featuredTier',
+          'featuredExpiresAt', 'referralCode', 'referredBy', 'isSuspended', 'isDemo',
+          'rankScore', 'createdAt', 'updatedAt'
+        ]) &&
+        data.uid is string && data.uid.size() >= 1 && data.uid.size() <= 128 &&
+        isValidUsername(data.username) &&
+        data.usernameLower is string && data.usernameLower.size() >= 3 && data.usernameLower.size() <= 32 &&
+        data.usernameLower.matches('^[a-z0-9_]+$') &&
+        data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 80 &&
+        (!('avatarUrl' in data) || (data.avatarUrl is string && data.avatarUrl.size() <= 500)) &&
+        (!('bio' in data) || (data.bio is string && data.bio.size() <= 400)) &&
+        (!('websiteUrl' in data) || (data.websiteUrl is string && data.websiteUrl.size() <= 300)) &&
+        (!('achievement' in data) || (data.achievement is string && data.achievement.size() <= 160)) &&
+        (!('referredBy' in data) || (data.referredBy is string && data.referredBy.size() <= 32)) &&
+        (!('featuredExpiresAt' in data) || data.featuredExpiresAt is string || data.featuredExpiresAt == null) &&
+        data.featuredTier in ['none', 'featured_7d', 'premium_30d', 'sponsored'] &&
+        data.referralCode is string && data.referralCode.size() >= 4 && data.referralCode.size() <= 32 &&
+        data.isSuspended is bool &&
+        data.isDemo is bool &&
+        data.badges is list && data.badges.size() >= 1 && data.badges.size() <= 10 &&
+        data.badges[0] is string &&
+        data.rankScore is number &&
+        data.createdAt is string && data.createdAt.size() <= 64 &&
+        (!('updatedAt' in data) || (data.updatedAt is string && data.updatedAt.size() <= 64));
+    }
+
+    function isValidNotification(data) {
+      return data.keys().hasAll(['uid', 'type', 'title', 'message', 'read', 'createdAt']) &&
+        data.keys().hasOnly(['uid', 'type', 'title', 'message', 'read', 'createdAt']) &&
+        data.uid is string && data.uid.size() >= 1 && data.uid.size() <= 128 &&
+        data.type in ['package_activated', 'package_expired', 'featured', 'achievement', 'system'] &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 120 &&
+        data.message is string && data.message.size() >= 1 && data.message.size() <= 400 &&
+        data.read is bool &&
+        data.createdAt is string && data.createdAt.size() <= 64;
+    }
+
+    function isValidReport(data) {
+      return data.keys().hasAll(['reporterUid', 'targetUid', 'targetUsername', 'reason', 'status', 'createdAt']) &&
+        data.keys().hasOnly(['reporterUid', 'targetUid', 'targetUsername', 'reason', 'status', 'createdAt']) &&
+        data.reporterUid == request.auth.uid &&
+        data.targetUid is string && data.targetUid.size() >= 1 && data.targetUid.size() <= 128 &&
+        data.targetUsername is string && data.targetUsername.size() >= 1 && data.targetUsername.size() <= 32 &&
+        data.reason is string && data.reason.size() >= 5 && data.reason.size() <= 500 &&
+        data.status in ['open', 'reviewed', 'dismissed'] &&
+        data.createdAt is string && data.createdAt.size() <= 64;
+    }
+
+    function isValidChallenge(data) {
+      return data.keys().hasAll(['challengerUid', 'challengerUsername', 'previousChampionUid', 'offeredPriceCents', 'status', 'createdAt']) &&
+        data.keys().hasOnly(['challengerUid', 'challengerUsername', 'previousChampionUid', 'offeredPriceCents', 'status', 'createdAt']) &&
+        data.challengerUid == request.auth.uid &&
+        isValidUsername(data.challengerUsername) &&
+        data.previousChampionUid is string && data.previousChampionUid.size() <= 128 &&
+        data.offeredPriceCents is number && data.offeredPriceCents >= 100 &&
+        data.status == 'sandbox_completed' &&
+        data.createdAt is string && data.createdAt.size() <= 64;
+    }
+
+    // 3. Admins Lookup Collection
+    match /admins/{adminId} {
+      allow get: if isValidId(adminId) && (isOwner(adminId) || isAdmin());
+      allow list, write: if isAdmin();
+    }
+
+    // 4. Profiles Collection
+    match /profiles/{uid} {
+      allow get: if isValidId(uid) && (resource == null || existing().isSuspended == false || isOwner(uid) || isAdmin());
+      allow list: if resource.data.isSuspended == false || (isVerified() && resource.data.uid == request.auth.uid) || isAdmin();
+
+      allow create: if isValidId(uid) && isValidProfile(incoming()) && (
+        isAdmin() || (
+          isOwner(uid) &&
+          incoming().uid == request.auth.uid &&
+          incoming().featuredTier == 'none' &&
+          incoming().isSuspended == false &&
+          incoming().isDemo == false &&
+          incoming().badges.size() == 1 &&
+          incoming().badges[0] == 'First Member'
+        )
+      );
+
+      allow update: if isValidId(uid) && isValidProfile(incoming()) && (
+        isAdmin() || (
+          isOwner(uid) &&
+          incoming().uid == existing().uid &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().featuredTier == existing().featuredTier &&
+          incoming().isSuspended == existing().isSuspended &&
+          incoming().isDemo == existing().isDemo &&
+          incoming().referralCode == existing().referralCode &&
+          incoming().badges == existing().badges &&
+          incoming().rankScore == existing().rankScore &&
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'username', 'usernameLower', 'displayName', 'avatarUrl',
+            'bio', 'websiteUrl', 'socialLinks', 'achievement', 'updatedAt'
+          ])
+        )
+      );
+
+      allow delete: if isAdmin();
+    }
+
+    // 5. Unique Usernames Registry
+    match /usernames/{usernameLower} {
+      allow get: if isValidId(usernameLower);
+      allow list: if false;
+      allow create: if isValidId(usernameLower) && isVerified() &&
+        incoming().keys().hasAll(['uid', 'createdAt']) &&
+        incoming().keys().hasOnly(['uid', 'createdAt']) &&
+        incoming().uid == request.auth.uid &&
+        incoming().createdAt is string && incoming().createdAt.size() <= 64;
+      allow update: if false;
+      allow delete: if isAdmin() || (isVerified() && existing().uid == request.auth.uid);
+    }
+
+    // 6. Leaderboard State (Atomic Sandbox Challenge Support)
+    match /leaderboard_state/{stateId} {
+      allow get, list: if true;
+      allow create: if isAdmin();
+      allow update: if (
+        isAdmin() || (
+          isVerified() &&
+          stateId == 'global' &&
+          incoming().keys().hasAll([
+            'currentChampionUid', 'currentChampionUsername', 'currentChampionDisplayName',
+            'currentChampionAvatar', 'currentChampionAchievement',
+            'currentPriceCents', 'nextPriceCents', 'version', 'updatedAt'
+          ]) &&
+          incoming().currentChampionUid == request.auth.uid &&
+          incoming().version == existing().version + 1 &&
+          incoming().currentPriceCents == existing().nextPriceCents &&
+          incoming().nextPriceCents == incoming().currentPriceCents + 100 &&
+          incoming().updatedAt is string && incoming().updatedAt.size() <= 64
+        )
+      );
+      allow delete: if false;
+    }
+
+    // 7. Sandbox Challenges Log
+    match /challenges/{challengeId} {
+      allow get, list: if true;
+      allow create: if isValidId(challengeId) && isVerified() && isValidChallenge(incoming());
+      allow update, delete: if isAdmin();
+    }
+
+    // 8. Champion History (Immutable Archive - Never deleted when champion changes)
+    match /champion_history/{historyId} {
+      allow get, list: if true;
+      allow create: if isValidId(historyId) && (
+        isAdmin() || (
+          isVerified() &&
+          incoming().uid == request.auth.uid &&
+          incoming().isDemo == false &&
+          incoming().winningPriceCents is number &&
+          incoming().startedAt is string && incoming().startedAt.size() <= 64
+        )
+      );
+      allow update: if isAdmin() || (
+        isVerified() &&
+        incoming().uid == existing().uid &&
+        incoming().startedAt == existing().startedAt &&
+        incoming().winningPriceCents == existing().winningPriceCents &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['endedAt', 'durationLabel'])
+      );
+      allow delete: if false;
+    }
+
+    // 9. Payments (Strictly Server/Admin Only for Writes)
+    match /payments/{paymentId} {
+      allow get: if isValidId(paymentId) && (isAdmin() || (isVerified() && existing().user_id == request.auth.uid));
+      allow list: if isAdmin() || (isVerified() && resource.data.user_id == request.auth.uid);
+      allow create, update, delete: if isAdmin();
+    }
+
+    // 10. Notifications
+    match /notifications/{notificationId} {
+      allow get: if isValidId(notificationId) && (isAdmin() || (isVerified() && existing().uid == request.auth.uid));
+      allow list: if isAdmin() || (isVerified() && resource.data.uid == request.auth.uid);
+      allow create: if isValidId(notificationId) && isValidNotification(incoming()) && (isAdmin() || incoming().uid == request.auth.uid);
+      allow update: if isValidId(notificationId) && isValidNotification(incoming()) && (
+        isAdmin() || (
+          isOwner(existing().uid) &&
+          incoming().uid == existing().uid &&
+          incoming().type == existing().type &&
+          incoming().title == existing().title &&
+          incoming().message == existing().message &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['read'])
+        )
+      );
+      allow delete: if isAdmin() || (isVerified() && existing().uid == request.auth.uid);
+    }
+
+    // 11. Referrals
+    match /referrals/{referralId} {
+      allow get: if isValidId(referralId) && (isAdmin() || (isVerified() && (existing().referrerUid == request.auth.uid || existing().referredUid == request.auth.uid)));
+      allow list: if isAdmin() || (isVerified() && resource.data.referrerUid == request.auth.uid);
+      allow create: if isValidId(referralId) && isVerified() &&
+        incoming().keys().hasAll(['referrerUid', 'referredUid', 'referralCode', 'createdAt']) &&
+        incoming().keys().hasOnly(['referrerUid', 'referredUid', 'referralCode', 'createdAt']) &&
+        incoming().referredUid == request.auth.uid &&
+        incoming().referrerUid is string && incoming().referrerUid.size() <= 128 &&
+        incoming().referralCode is string && incoming().referralCode.size() <= 32 &&
+        incoming().createdAt is string && incoming().createdAt.size() <= 64;
+      allow update, delete: if isAdmin();
+    }
+
+    // 12. Reports
+    match /reports/{reportId} {
+      allow get, list: if isAdmin();
+      allow create: if isValidId(reportId) && isVerified() && isValidReport(incoming()) && incoming().status == 'open';
+      allow update, delete: if isAdmin();
+    }
+
+    // 13. Audit Logs & Webhook Events (Admin/Server Only)
+    match /audit_logs/{logId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /webhook_events/{eventId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /stripe_events/{eventId} {
+      allow read, write: if isAdmin();
+    }
+  }
+}
